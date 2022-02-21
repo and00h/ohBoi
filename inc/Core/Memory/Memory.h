@@ -11,13 +11,16 @@
 #include <Core/Memory/Wram.h>
 #include "Core/cpu/Interrupts.h"
 #include "Core/Memory/Address_space.h"
+#include "Ppu.h"
 
+// Forward declaration
 namespace gb {
     class Gameboy;
 }
 
 namespace gb::memory {
     enum io_ports: uint16_t;
+
     class Memory {
     public:
         Memory(gb::Gameboy &gb, std::shared_ptr<gb::cpu::Interrupts> interrupts, std::unique_ptr<mbc::Mbc> controller);
@@ -26,11 +29,31 @@ namespace gb::memory {
         uint8_t read(uint16_t addr);
         void write(uint16_t addr, uint8_t val);
 
-        void trigger_dma(uint8_t addr);
         void step_dma(unsigned int cycles);
-        [[nodiscard]] bool is_dma_completed() const { return dma_completed_; }
+        [[nodiscard]] bool is_dma_completed() const { return dma_controller_.is_completed(); }
     private:
+        class Dma_controller {
+        public:
+            Dma_controller(Memory &mem_);
+
+            void trigger(uint8_t index);
+            void step(int cycles);
+
+            [[nodiscard]] uint8_t get_index() const { return mem_index_; }
+            [[nodiscard]] bool is_running() const { return !(dma_completed_ || dma_wait_); }
+            [[nodiscard]] bool is_completed() const { return dma_completed_; }
+        private:
+            Memory& mem_;
+            uint8_t mem_index_;
+            uint16_t dma_addr_;
+            bool dma_completed_;
+            unsigned int dma_index_;
+            bool dma_trigger_;
+            bool dma_wait_;
+        };
+
         Gameboy& gb_;
+        Dma_controller dma_controller_;
 
         std::unique_ptr<mbc::Mbc> controller_;
         std::shared_ptr<cpu::Interrupts> interrupts_;
@@ -40,15 +63,12 @@ namespace gb::memory {
         std::array<char, 256> bootrom_;
         Wram wram_;
 
-        uint16_t dma_addr_;
-        bool dma_completed_;
-        unsigned int dma_index_;
-        bool dma_trigger_;
-        bool dma_wait_;
         bool booting_;
 
         uint8_t read_io_port(uint16_t port_addr);
         void write_io_port(uint16_t port_addr, uint8_t val);
+
+        void dma_write_oam(uint16_t addr, uint8_t val);
     };
 
     enum boundaries: uint16_t {
@@ -88,6 +108,7 @@ namespace gb::memory {
         tma              = 0xFF06,
         tac              = 0xFF07,
         int_req          = 0xFF0F,
+        dma_transfer     = 0xFF46,
         cpu_double_speed = 0xFF4D,
         bootrom_enable   = 0xFF50,
         wram_bank_select = 0xFF70,

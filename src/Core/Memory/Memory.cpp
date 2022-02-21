@@ -45,18 +45,11 @@ namespace {
 gb::memory::Memory::Memory(gb::Gameboy &gb, std::shared_ptr<cpu::Interrupts> interrupts, std::unique_ptr<mbc::Mbc> controller)
     : gb_(gb), controller_(std::move(controller)), interrupts_(std::move(interrupts)), hram_(0x7F), io_ports_(0x80),
       wram_(0x1000 << (gb.is_cgb_ ? 3 : 1)),
-      dma_addr_(0), dma_completed_(true), dma_index_(0), dma_trigger_(false), dma_wait_(false), booting_(true) {
+      dma_controller_(*this),
+      booting_(true) {
     std::ifstream b("DMG_ROM.bin", std::ios::binary | std::ios::in);
     b.read((char *) bootrom_.data(), 256);
     b.close();
-}
-
-void gb::memory::Memory::trigger_dma(uint8_t addr) {
-    dma_completed_ = false;
-
-    dma_addr_ = ((uint16_t) addr) << 8;
-    dma_index_ = 0;
-    dma_trigger_ = true;
 }
 
 uint8_t gb::memory::Memory::read(uint16_t addr) {
@@ -81,7 +74,7 @@ uint8_t gb::memory::Memory::read(uint16_t addr) {
         case boundaries::echo_start:
             return read(addr - 0x2000);
         case boundaries::oam_start:
-            return !dma_completed_ && !dma_wait_ ? 0xFF : gb_.gpu_->read_oam(addr - boundaries::oam_start);
+            return dma_controller_.is_running() ? 0xFF : gb_.gpu_->read_oam(addr - boundaries::oam_start);
         case boundaries::prohibited_start:
             break;
         case boundaries::io_start:
@@ -121,7 +114,7 @@ void gb::memory::Memory::write(uint16_t addr, uint8_t val) {
             write(addr - 0x2000, val);
             break;
         case boundaries::oam_start:
-            if (dma_completed_ || dma_wait_) {
+            if ( !dma_controller_.is_running() ) {
                gb_.gpu_->write_oam(addr - boundaries::oam_start, val);
             }
             break;
@@ -140,25 +133,7 @@ void gb::memory::Memory::write(uint16_t addr, uint8_t val) {
 }
 
 void gb::memory::Memory::step_dma(unsigned int cycles) {
-    static const uint8_t dma_size = 0xA0;
-
-    while ( cycles > 0 && !dma_completed_ ) {
-        if ( dma_trigger_ ) {
-            dma_trigger_ = false;
-            dma_wait_ = true;
-            cycles -= 4;
-            continue;
-        }
-        if ( !dma_wait_ ) {
-            gb_.gpu_->write_oam(dma_index_, read(dma_addr_ + dma_index_));
-            if (++dma_index_ == dma_size ) {
-                dma_trigger_ = false;
-                dma_completed_ = true;
-            }
-        } else
-            dma_wait_ = false;
-        cycles -= 4;
-    }
+    dma_controller_.step(cycles);
 }
 
 uint8_t gb::memory::Memory::read_io_port(uint16_t port_addr) {
@@ -190,12 +165,20 @@ uint8_t gb::memory::Memory::read_io_port(uint16_t port_addr) {
         case io_boundaries::apu_io_start:
             return gb_.apu_.read(port_addr);
         case io_boundaries::gpu_io_start:
-            if ( port_addr == io_ports::cpu_double_speed ) {
-                return gb_.cpu_->double_speed() ? 0x80 : 0;
+            switch (port_addr) {
+                case io_ports::cpu_double_speed:
+                    return gb_.cpu_->double_speed() ? 0x80 : 0;
+                case io_ports::dma_transfer:
+                    return dma_controller_.get_index();
+                default:
+                    return gb_.gpu_->read(port_addr);
             }
-            else {
-                return gb_.gpu_->read(port_addr);
-            }
+//            if ( port_addr == io_ports::cpu_double_speed ) {
+//                return mem_.cpu_->double_speed() ? 0x80 : 0;
+//            }
+//            else {
+//                return mem_.gpu_->read(port_addr);
+//            }
     }
     return 0xFF;
 }
@@ -253,11 +236,27 @@ void gb::memory::Memory::write_io_port(uint16_t port_addr, uint8_t val) {
             gb_.apu_.send(port_addr, val);
             break;
         case io_boundaries::gpu_io_start:
-            if ( port_addr == io_ports::cpu_double_speed ) {
-                gb_.cpu_->set_double_speed(val & 1);
+            switch (port_addr) {
+                case io_ports::cpu_double_speed:
+                    gb_.cpu_->set_double_speed(val & 1);
+                    break;
+                case io_ports::dma_transfer:
+                    dma_controller_.trigger(val);
+                    break;
+                default:
+                    gb_.gpu_->send(port_addr, val);
+                    break;
             }
-            else {
-                gb_.gpu_->send(port_addr, val);
-            }
+            break;
+//            if ( port_addr == io_ports::cpu_double_speed ) {
+//                mem_.cpu_->set_double_speed(val & 1);
+//            }
+//            else {
+//                mem_.gpu_->send(port_addr, val);
+//            }
     }
+}
+
+void gb::memory::Memory::dma_write_oam(uint16_t addr, uint8_t val) {
+    gb_.gpu_->write_oam(addr, val);
 }

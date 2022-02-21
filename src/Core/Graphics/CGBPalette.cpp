@@ -19,7 +19,7 @@ static uint8_t color_map[0x20] = {
 static Uint32 get_color_rgb(uint8_t c) {
     if ( c > 0x1F ) {
         std::ostringstream s;
-        s << "(get_color_rgb) Invalid color: $" << std::hex << c;
+        s << "(get_color_rgb) Invalid color_: $" << std::hex << c;
         Logger::error("CGBPalette", s.str());
         return 0xFF;
     }
@@ -33,7 +33,7 @@ CGBPalette::CGBPalette() {
 Uint32 CGBPalette::get_color(int palette_number, int color_number) {
     if ( palette_number > 7 || color_number > 3 ) {
         std::ostringstream s;
-        s << "(get_color) Invalid palette/color: " << palette_number << "/" << color_number;
+        s << "(get_color) Invalid palette_/color_: " << palette_number << "/" << color_number;
         Logger::error("CGBPalette", s.str());
         return 0xFFFFFFFF;
     }
@@ -43,7 +43,7 @@ Uint32 CGBPalette::get_color(int palette_number, int color_number) {
 uint8_t CGBPalette::get_byte(int index) {
     if ( index > 0x3F ) {
         std::ostringstream s;
-        s << "(get_byte) Invalid palette/color: " << index;
+        s << "(get_byte) Invalid palette_/color_: " << index;
         Logger::error("CGBPalette", s.str());
         return 0xFF;
     }
@@ -53,7 +53,7 @@ uint8_t CGBPalette::get_byte(int index) {
 void CGBPalette::set_byte(uint8_t val, int index) {
     if ( index > 0x3F ) {
         std::ostringstream s;
-        s << "(set_byte) Invalid palette/color: " << index;
+        s << "(set_byte) Invalid palette_/color_: " << index;
         Logger::error("CGBPalette", s.str());
         return;
     }
@@ -63,7 +63,7 @@ void CGBPalette::set_byte(uint8_t val, int index) {
 Uint32 *CGBPalette::get_palette(int palette_number) {
     if ( palette_number > 7 ) {
         std::ostringstream s;
-        s << "(get_palette) Invalid palette: " << palette_number;
+        s << "(get_palette) Invalid palette_: " << palette_number;
         Logger::error("CGBPalette", s.str());
         return palettes[0];
     }
@@ -71,10 +71,10 @@ Uint32 *CGBPalette::get_palette(int palette_number) {
 }
 
 void CGBPalette::update(int palette_number) {
-    Logger::info("CGBPalette", "Updating palette");
+    Logger::info("CGBPalette", "Updating palette_");
     if ( palette_number > 7 ) {
         std::ostringstream s;
-        s << "(update) Invalid palette: " << palette_number;
+        s << "(update) Invalid palette_: " << palette_number;
         Logger::error("CGBPalette", s.str());
         return;
     }

@@ -23,9 +23,9 @@ namespace {
                 {SDLK_5, [&gb] { gb->toggle_ch2(); }},
                 {SDLK_6, [&gb] { gb->toggle_wave(); }},
                 {SDLK_7, [&gb] { gb->toggle_noise(); }},
-                {SDLK_8, [&gb] { gb->set_speed(1.5); }},
-                {SDLK_9, [&gb] { gb->set_speed(2); }},
-                {SDLK_0, [&gb] { gb->set_speed(4); }},
+                {SDLK_8, [&gb] { gb->set_speed(15); }},
+                {SDLK_9, [&gb] { gb->set_speed(20); }},
+                {SDLK_0, [&gb] { gb->set_speed(40); }},
                 {SDLK_COMMA, [&gb] { gb->set_speed(1); }},
                 {SDLK_p, [&gb] { gb->toggle_pause(); }},
                 {SDLK_a, [&gb] { gb->press_key(Joypad::KEY_A); }},
@@ -65,14 +65,15 @@ namespace {
         }
     }
 }
+
 int main() {
     static std::map<Uint32, std::function<void(void)>> event_callbacks;
 
     Logger::toggle_info();
     std::unique_ptr<gb::Gameboy> gb(nullptr);
 
-    Display display = Display();
-    Audio audio = Audio();
+    Display display{};
+    Audio audio{};
 
     display.clear();
     std::chrono::system_clock::time_point a = std::chrono::system_clock::now();

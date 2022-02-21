@@ -74,7 +74,7 @@ add_executable(ohBoi
         src/Audio.cpp
         src/Display.cpp
         src/main.cpp src/Core/Graphics/Tile.cpp inc/Core/Graphics/Tile.h src/Core/Graphics/Pixel_fetcher.cpp
-        )
+        src/Core/Memory/Dma_controller.cpp)
 
 target_compile_options(ohBoi PRIVATE -O3 -Wall -Wextra)
 target_link_libraries(ohBoi ${LIBRARIES})

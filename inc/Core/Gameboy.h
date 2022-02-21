@@ -36,7 +36,7 @@ namespace gb {
         void reset_cpu_cycle_counter() const { cpu_->reset_cycle_counter(); }
         void resume() { paused_ = false; }
         void toggle_pause() { paused_ = not paused_; }
-        void set_speed(double multiplier) { speed_multiplier_ = multiplier; }
+        void set_speed(unsigned int multiplier) { speed_multiplier_ = multiplier; }
         void step();
 
         void toggle_ch1() { apu_.toggle_ch1(); }
@@ -73,7 +73,7 @@ namespace gb {
 
         bool is_cgb_;
         bool paused_;
-        double speed_multiplier_;
+        unsigned int speed_multiplier_;
 
         void clock(unsigned int cycles);
     };
