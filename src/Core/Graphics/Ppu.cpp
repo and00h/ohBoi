@@ -5,7 +5,9 @@
 #include <Core/Graphics/Ppu.h>
 #include <Core/Gameboy.h>
 #include <map>
-#include <functional>
+#include <ranges>
+#include <span>
+
 #include "Core/Memory/Address_space.h"
 #include "Core/cpu/Interrupts.h"
 #include "Tile.h"
@@ -13,7 +15,7 @@
 namespace {
     constexpr uint16_t vram_bank_size = 0x2000;
     constexpr uint16_t oam_size = 0xA0;
-    constexpr uint32_t monoPalette[] { 0xFFFFFFFF, 0xFFCCCCCC, 0xFF777777, 0xFF000000 };
+    constexpr uint32_t mono_palette[] { 0xFFFFFFFF, 0xFFCCCCCC, 0xFF777777, 0xFF000000 };
 
     enum Lcd_status_int_masks: uint8_t {
         hblank = 0x8,
@@ -23,8 +25,8 @@ namespace {
 }
 // Public methods
 gb::graphics::Ppu::Ppu(gb::Gameboy &pGB, std::shared_ptr<cpu::Interrupts> interrupts)
-        : gb_(pGB), interrupts_(std::move(interrupts)), oam_(oam_size), vram_(vram_bank_size << (pGB.is_cgb_ ? 1 : 0)),
-          bg_fifo_{}, spr_fifo_{}, pixel_fetcher_(*this), state_(Ppu_state::oam_search) {
+        : state_(Ppu_state::oam_search), gb_(pGB), interrupts_(std::move(interrupts)), pixel_fetcher_(*this),
+          bg_fifo_{}, spr_fifo_{}, oam_(oam_size), vram_(vram_bank_size << (pGB.is_cgb_ ? 1 : 0)) {
     reset();
     tileset_.reserve(384);
     tileset_bank1_.reserve(384);
@@ -44,116 +46,106 @@ void gb::graphics::Ppu::reset() {
     window_y_ = 0;
     scanline_counter_ = 0;
     vram_bank_ = 0;
-    enable_bg_ = enable_window_ = enable_sprites_ = true;
+    enable_bg_ = enable_window_ = true;
+    enable_sprites_ = true;
     hdma_running_ = false;
+    opri_ = gb_.is_cgb_ ? 0 : 1;
     update_bg_palette();
     update_obj0_palette();
     update_obj1_palette();
-    if ( gb_.is_cgb_ ) {
-
-    }
+//    if ( gb_.is_cgb_ ) {
+//
+//    }
 }
 uint8_t gb::graphics::Ppu::read(uint16_t addr) {
     switch (addr) {
-        case LCD_CONTROL:   return lcdc_.val;
-        case LCD_STATUS:    return lcd_stat_;
-        case SCROLL_Y:      return scroll_y_;
-        case SCROLL_X:      return scroll_x_;
-        case LCDC_Y:        return ly_;
-        case LY_COMPARE:    return lyc_;
-        case BG_PALETTE:    return gb_.is_cgb_ ? 0xFF : bg_pal_;
-        case OBJ_PAL0:      return gb_.is_cgb_ ? 0xFF : obj0_pal_;
-        case OBJ_PAL1:      return gb_.is_cgb_ ? 0xFF : obj1_pal_;
-        case WINDOW_Y:      return window_y_;
-        case WINDOW_X:      return window_x_;
+        case Gpu_reg_location::lcd_control:   return lcdc_.val;
+        case Gpu_reg_location::lcd_status:    return lcd_stat_;
+        case Gpu_reg_location::scroll_y:      return scroll_y_;
+        case Gpu_reg_location::scroll_x:      return scroll_x_;
+        case Gpu_reg_location::ly:            return ly_;
+        case Gpu_reg_location::lyc:           return lyc_;
+        case Gpu_reg_location::bg_palette:    return gb_.is_cgb_ ? 0xFF : bg_pal_;
+        case Gpu_reg_location::obj_pal0:      return gb_.is_cgb_ ? 0xFF : obj0_pal_;
+        case Gpu_reg_location::obj_pal1:      return gb_.is_cgb_ ? 0xFF : obj1_pal_;
+        case Gpu_reg_location::window_y:      return window_y_;
+        case Gpu_reg_location::window_x:      return window_x_;
+        case Gpu_reg_location::vram_bank_sel: return vram_bank_ | 0xFE;
+        case Gpu_reg_location::hdma_src_msb:  return hdma_source_msb_;
+        case Gpu_reg_location::hdma_src_lsb:  return hdma_source_lsb_;
+        case Gpu_reg_location::hdma_dst_msb:  return hdma_dest_msb_;
+        case Gpu_reg_location::hdma_dst_lsb:  return hdma_dest_lsb_;
+        case Gpu_reg_location::hdma_len:      return hdma_len_mode_.val;
+        case Gpu_reg_location::bcps:          return bcps_.val;
+        case Gpu_reg_location::bcpd:          return bcpd_.get_byte(bcps_.index);
+        case Gpu_reg_location::ocps:          return ocps_.val;
+        case Gpu_reg_location::ocpd:          return ocpd_.get_byte(ocps_.index);
+        case Gpu_reg_location::opri:          return opri_;
+        default:
+            return 0xFF;
     }
-    if ( gb_.is_cgb_ ) {
-        switch (addr) {
-            case VRAM_BANK_SEL:
-                return vram_bank_ | 0xFE;
-            case HDMA_SRC_HI:
-                return hdma_source_msb_;
-            case HDMA_SRC_LO:
-                return hdma_source_lsb_;
-            case HDMA_DST_HI:
-                return hdma_dest_msb_;
-            case HDMA_DST_LO:
-                return hdma_dest_lsb_;
-            case HDMA_LEN:
-                return hdma_len_mode_.val;
-            case BCPS:
-                return bcps_.val;
-            case BCPD:
-                return bcpd_.get_byte(bcps_.index);
-            case OCPS:
-                return ocps_.val;
-            case OCPD:
-                return ocpd_.get_byte(ocps_.index);
-        }
-    }
-    return 0xFF;
 }
 
 void gb::graphics::Ppu::send(uint16_t addr, uint8_t val) {
     switch(addr) {
-        case LCD_CONTROL:
+        case Gpu_reg_location::lcd_control:
             lcdc_.val = val;
             break;
-        case LCD_STATUS:
+        case Gpu_reg_location::lcd_status:
             lcd_stat_ = 0x80 | val;
             break;
-        case SCROLL_Y:
+        case Gpu_reg_location::scroll_y:
             scroll_y_ = val;
             break;
-        case SCROLL_X:
+        case Gpu_reg_location::scroll_x:
             scroll_x_ = val;
             break;
-        case LCDC_Y:
+        case Gpu_reg_location::ly:
             ly_ = 0;
             break;
-        case LY_COMPARE:
+        case Gpu_reg_location::lyc:
             lyc_ = val;
             break;
-        case BG_PALETTE:
+        case Gpu_reg_location::bg_palette:
             if ( !gb_.is_cgb_ ) {
                 bg_pal_ = val;
                 update_bg_palette();
             }
             break;
-        case OBJ_PAL0:
+        case Gpu_reg_location::obj_pal0:
             if ( !gb_.is_cgb_ ) {
                 obj0_pal_ = val;
                 update_obj0_palette();
             }
             break;
-        case OBJ_PAL1:
+        case Gpu_reg_location::obj_pal1:
             if ( !gb_.is_cgb_ ) {
                 obj1_pal_ = val;
                 update_obj1_palette();
             }
             break;
-        case WINDOW_Y:
+        case Gpu_reg_location::window_y:
             window_y_ = val;
             break;
-        case WINDOW_X:
+        case Gpu_reg_location::window_x:
             window_x_ = val;
             break;
-        case 0xFF4F:
+        case Gpu_reg_location::vram_bank_sel:
             vram_bank_ = val & 1;
             break;
-        case HDMA_SRC_HI:
+        case Gpu_reg_location::hdma_src_msb:
             hdma_source_msb_ = val;
             break;
-        case HDMA_SRC_LO:
+        case Gpu_reg_location::hdma_src_lsb:
             hdma_source_lsb_ = val;
             break;
-        case HDMA_DST_HI:
+        case Gpu_reg_location::hdma_dst_msb:
             hdma_dest_msb_ = val;
             break;
-        case HDMA_DST_LO:
+        case Gpu_reg_location::hdma_dst_lsb:
             hdma_dest_lsb_ = val;
             break;
-        case HDMA_LEN:
+        case Gpu_reg_location::hdma_len:
             if ( !hdma_running_ ) {
                 hdma_len_mode_.val = val;
                 if (hdma_len_mode_.type == 0 )
@@ -164,28 +156,32 @@ void gb::graphics::Ppu::send(uint16_t addr, uint8_t val) {
                 }
             }
             break;
-        case BCPS:
+        case Gpu_reg_location::bcps:
             bcps_.val = val;
             break;
-        case BCPD:
+        case Gpu_reg_location::bcpd:
             bcpd_.set_byte(val, bcps_.index);
             bcpd_.update(bcps_.index >> 3);
             if ( bcps_.auto_increment )
                 bcps_.index = (bcps_.index + 1) & 0x3F;
             break;
-        case OCPS:
+        case Gpu_reg_location::ocps:
             ocps_.val = val;
             break;
-        case OCPD:
+        case Gpu_reg_location::ocpd:
             ocpd_.set_byte(val, ocps_.index);
             ocpd_.update(ocps_.index >> 3);
             if ( ocps_.auto_increment )
                 ocps_.index = (ocps_.index + 1) & 0x3F;
             break;
+        case Gpu_reg_location::opri:
+            opri_ = val;
+            break;
         default:
-            std::ostringstream s("Writing to unknown Ppu register at $");
+            std::ostringstream s("Write to unknown Ppu register at $");
             s << std::hex << addr;
             s << " value 0x" << std::hex << val;
+            std::cout << s.str() << std::endl;
             break;
     }
 }
@@ -194,7 +190,18 @@ void gb::graphics::Ppu::render_pixel() {
     if ( pixel_fetcher_.is_rendering_sprites() )
         return;
 
-    if ( !rendering_window_ && is_window_visible() ) {
+    if ( lcdc_.obj_enable && enable_sprites_ ) {
+        auto sprite = std::find_if(sprites_.begin(), sprites_.end(), [this](Sprite a) {
+            return current_pixel_ >= a.x - 8 && current_pixel_ < a.x && !a._removed;
+        });
+        if ( sprite != sprites_.end() && bg_fifo_.size() >= 8 ) {
+            pixel_fetcher_.start_sprite_fetch(*sprite, ly_);
+            sprite->_removed = true;
+            return;
+        }
+    }
+
+    if ( !rendering_window_ && is_window_visible() && enable_window_ ) {
         rendering_window_ = true;
 
         uint8_t x_ = current_pixel_ - (window_x_ - 7);
@@ -205,22 +212,8 @@ void gb::graphics::Ppu::render_pixel() {
         return;
     }
 
-    if ( lcdc_.obj_enable ) {
-        for ( auto& s : sprites_ ) {
-            if ( current_pixel_ >= s.x - 8 ) {
-                if ( s._removed )
-                    continue;
-                if (bg_fifo_.size() >= 8 ) {
-                    pixel_fetcher_.start_sprite_fetch(s, ly_);
-                    s._removed = true;
-                }
-                return;
-            }
-        }
-    }
-
     if ( !bg_fifo_.empty() ) {
-        Tile_pixel bg_pixel = (gb_.is_cgb_ || lcdc_.bg_window_enable_priority) ? bg_fifo_.front() : 0;
+        Tile_pixel bg_pixel = (gb_.is_cgb_ || lcdc_.bg_window_enable_priority) && enable_bg_ ? bg_fifo_.front() : 0;
         uint8_t color_ = bg_pixel.color_;
         uint32_t *pal = gb_.is_cgb_ ? bcpd_.get_palette(bg_pixel.palette_) : bg_pal_colors_;
         if ( !spr_fifo_.empty() ) {
@@ -265,20 +258,11 @@ void gb::graphics::Ppu::step(unsigned int cycles) {
     while ( cycles-- > 0 ) {
         switch (state_) {
             case Ppu_state::hblank:
-                if (++scanline_counter_ == 456 ) {
+                if ( advance_scanline_counter() == 0 ) {
                     if (hdma_running_)
                         step_hdma();
-                    scanline_counter_ = 0;
-                    ++ly_;
-                    if (ly_ == lyc_ ) {
-                        lcd_stat_ |= (1 << COINCIDENCE_FLAG);
-                        interrupts_->request(cpu::Interrupts::lcd);
-                    } else if (ly_ != lyc_ ) {
-                        if (lcd_stat_ & (1 << COINCIDENCE_FLAG) ) {
-                            lcd_stat_ &= ~(1 << COINCIDENCE_FLAG);
-                        }
-                    }
-                    if (ly_ == 144 ) {
+
+                    if ( advance_scanline() == 144 ) {
                         update_state(Ppu_state::vblank);
                         interrupts_->request(cpu::Interrupts::v_blank);
                     } else {
@@ -287,22 +271,11 @@ void gb::graphics::Ppu::step(unsigned int cycles) {
                 }
                 break;
             case Ppu_state::vblank:
-                if (++scanline_counter_ == 456 ) {
-                    scanline_counter_ = 0;
-                    ly_++;
-                    if (ly_ == lyc_ ) {
-                        lcd_stat_ |= (1 << COINCIDENCE_FLAG);
-                        interrupts_->request(cpu::Interrupts::lcd);
-                    } else if (ly_ != lyc_ ) {
-                        if (lcd_stat_ & (1 << COINCIDENCE_FLAG) ) {
-                            lcd_stat_ &= ~(1 << COINCIDENCE_FLAG);
-                        }
+                if ( advance_scanline_counter() == 0 ) {
+                    if ( advance_scanline() == 0 ) {
+                        internal_window_counter_ = 0;
+                        update_state(Ppu_state::oam_search);
                     }
-                }
-                if (ly_ == 154 ) {
-                    ly_ = 0;
-                    internal_window_counter_ = 0;
-                    update_state(Ppu_state::oam_search);
                 }
                 break;
             case Ppu_state::pixel_transfer:
@@ -311,17 +284,20 @@ void gb::graphics::Ppu::step(unsigned int cycles) {
                 scanline_counter_++;
                 break;
             case Ppu_state::oam_search:
-                if (++scanline_counter_ == 80 ) {
+                if (advance_scanline_counter() == 80 ) {
                     sprites_.clear();
-                    for (int i = 0; i < oam_size && sprites_.size() < 10; i += 4 ) {
-                        Sprite x{static_cast<uint8_t>(i >> 2), oam_[i], oam_[i + 1], oam_[i + 2], oam_[i + 3], false};
+                    for (uint8_t i = 0; i < oam_size && sprites_.size() < 10; i += 4 ) {
+                        Sprite x{i, oam_[i], oam_[i + 1], oam_[i + 2], oam_[i + 3], false};
                         if ((ly_ + 16 >= x.y) && (ly_ + 16 < (x.y + (lcdc_.obj_size ? 16 : 8))) ) {
                             sprites_.push_back(x);
                         }
                     }
-                    std::sort(sprites_.begin(), sprites_.end(), [](Sprite a, Sprite b) {
-                        return a.x <= b.x && a.oam_offset < b.oam_offset;
-                    });
+                    if ( !gb_.is_cgb_ ) {
+                        std::stable_sort(sprites_.begin(), sprites_.end(), [](Sprite a, Sprite b) {
+                            return a.x <= b.x;
+                        });
+                    }
+
                     uint8_t x_, y_;
                     x_ = scroll_x_;
                     y_ = ly_ + scroll_y_;
@@ -358,19 +334,24 @@ void gb::graphics::Ppu::write_vram(uint16_t addr, uint8_t val) {
     }
 }
 
+static void update_palette_colors_gb(std::span<uint8_t> colors, const uint8_t palette) {
+    for ( int i = 0; i < 4; i++ )
+        colors[i] = mono_palette[(palette >> (i * 2)) & 0x3];
+}
+
 void gb::graphics::Ppu::update_bg_palette() {
     for (int i = 0; i < 4; i++)
-        bg_pal_colors_[i] = monoPalette[(bg_pal_ >> (i * 2)) & 0x3];
+        bg_pal_colors_[i] = mono_palette[(bg_pal_ >> (i * 2)) & 0x3];
 }
 
 void gb::graphics::Ppu::update_obj0_palette() {
     for (int i = 0; i < 4; i++)
-        obj0_pal_colors_[i] = monoPalette[(obj0_pal_ >> (i * 2)) & 0x3];
+        obj0_pal_colors_[i] = mono_palette[(obj0_pal_ >> (i * 2)) & 0x3];
 }
 
 void gb::graphics::Ppu::update_obj1_palette() {
     for (int i = 0; i < 4; i++)
-        obj1_pal_colors_[i] = monoPalette[(obj1_pal_ >> (i * 2)) & 0x3];
+        obj1_pal_colors_[i] = mono_palette[(obj1_pal_ >> (i * 2)) & 0x3];
 }
 
 void gb::graphics::Ppu::launch_gp_hdma() {
@@ -409,3 +390,21 @@ void gb::graphics::Ppu::update_state(Ppu_state new_state) {
     }
 }
 
+uint8_t gb::graphics::Ppu::advance_scanline() {
+    ly_ = (ly_ + 1) % 154;
+    if (ly_ == lyc_ ) {
+        lcd_stat_ |= (1 << COINCIDENCE_FLAG);
+        interrupts_->request(cpu::Interrupts::lcd);
+    } else {
+        if (lcd_stat_ & (1 << COINCIDENCE_FLAG) ) {
+            lcd_stat_ &= ~(1 << COINCIDENCE_FLAG);
+        }
+    }
+
+    return ly_;
+}
+
+uint16_t gb::graphics::Ppu::advance_scanline_counter() {
+    scanline_counter_ = (scanline_counter_ + 1) % 456;
+    return scanline_counter_;
+}

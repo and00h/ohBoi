@@ -173,12 +173,6 @@ uint8_t gb::memory::Memory::read_io_port(uint16_t port_addr) {
                 default:
                     return gb_.gpu_->read(port_addr);
             }
-//            if ( port_addr == io_ports::cpu_double_speed ) {
-//                return mem_.cpu_->double_speed() ? 0x80 : 0;
-//            }
-//            else {
-//                return mem_.gpu_->read(port_addr);
-//            }
     }
     return 0xFF;
 }
@@ -194,7 +188,7 @@ void gb::memory::Memory::write_io_port(uint16_t port_addr, uint8_t val) {
         case io_boundaries::io_tail_start:
             switch (port_addr) {
                 case io_ports::serial_data:
-                    //printf("%c", val);
+                    //printf("%c", values);
                     break;
                 case io_ports::joypad_reg:
                     gb_.joypad_->select_key_group(val);
@@ -248,12 +242,6 @@ void gb::memory::Memory::write_io_port(uint16_t port_addr, uint8_t val) {
                     break;
             }
             break;
-//            if ( port_addr == io_ports::cpu_double_speed ) {
-//                mem_.cpu_->set_double_speed(val & 1);
-//            }
-//            else {
-//                mem_.gpu_->send(port_addr, val);
-//            }
     }
 }
 

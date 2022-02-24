@@ -51,7 +51,7 @@ void apu::reset() {
     send(0x26, 0x81);
 
     wave.clear_wave_pattern();
-//    sound_control.val = 0x81;
+//    sound_control.values = 0x81;
 }
 
 apu::apu() : 

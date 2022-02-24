@@ -14,7 +14,7 @@ public:
     Tile();
     explicit Tile(const uint8_t data[16]);
 
-    [[nodiscard]] uint8_t get_color(int x, int y) { return tile_colors_[y][x]; }
+    [[nodiscard]] uint8_t get_color(int x, int y) const { return tile_colors_[y][x]; }
     void update_byte(int n, uint8_t val);
 private:
     std::array<std::array<uint8_t,8>, 8> tile_colors_{};
