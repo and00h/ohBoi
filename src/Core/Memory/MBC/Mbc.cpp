@@ -38,7 +38,7 @@ struct cartridge_header {
     uint8_t global_checksum[2];
 } __attribute__ ((__packed__));
 
-static constexpr unsigned int ram_size_map[6] = {
+static unsigned int ram_size_map[6] = {
         1, 2048, 8192, 32768, 131072, 65535
 };
 

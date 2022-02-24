@@ -137,13 +137,8 @@ void gb::graphics::Ppu::Pixel_fetcher::push() {
                     auto& tileset = bg_tile_attributes_.vram_bank == 0 ? ppu_.tileset_ : ppu_.tileset_bank1_;
                     uint8_t _x = bg_tile_attributes_.x_flip ? (7 - tile_x) : tile_x;
                     uint8_t _y = bg_tile_attributes_.y_flip ? (7 - tile_y_) : tile_y_;
-
-                    Tile_pixel _p {
-                            tileset[tile_index_].get_color(_x,_y),
-                            bg_tile_attributes_.priority,
-                            bg_tile_attributes_.pal_number
-                    };
-                    ppu_.bg_fifo_.push(_p);
+                    ppu_.bg_fifo_.push(Tile_pixel{tileset[tile_index_].get_color(_x,_y),bg_tile_attributes_.priority,
+                                        bg_tile_attributes_.pal_number});
                 }
                 tile_x--;
             }
@@ -154,23 +149,18 @@ void gb::graphics::Ppu::Pixel_fetcher::push() {
             for (uint8_t tile_x = 0; tile_x <= 7; tile_x++) {
                 auto _color = ppu_.tileset_[sprite_tile_index_].get_color(((spr_.attributes) & 0x20) ? tile_x : (7 - tile_x),
                                                                          sprite_tile_y);
-                Sprite_pixel p {
-                    _color,
-                    static_cast<uint8_t>((spr_.attributes >> 4) & 1),
-                    static_cast<uint8_t>((spr_.attributes >> 7) & 1),
-                    spr_.oam_offset
-                };
-
+                Sprite_pixel p = {_color,
+                                  static_cast<uint8_t>((spr_.attributes >> 4) & 1),
+                                  static_cast<uint8_t>((spr_.attributes >> 7) & 1)};
                 if ( ppu_.gb_.is_cgb_ ) {
                     p = {((spr_.attributes & 8) ? ppu_.tileset_bank1_ : ppu_.tileset_)[sprite_tile_index_].get_color(((spr_.attributes >> 5) & 1) ? tile_x : (7 - tile_x), sprite_tile_y),
                          static_cast<uint8_t>(spr_.attributes & 7),
-                         static_cast<uint8_t>((spr_.attributes >> 7) & 1),
-                         spr_.oam_offset};
+                         static_cast<uint8_t>((spr_.attributes >> 7) & 1)};
                 }
                 if (ppu_.spr_fifo_.size() <= tile_x ) {
                     ppu_.spr_fifo_.push_back(p);
                 } else {
-                    if (ppu_.spr_fifo_.at(tile_x).color_ == 0 || ((ppu_.opri_ & 1) && spr_.oam_offset < ppu_.spr_fifo_.at(tile_x).oam_offset_) )
+                    if (ppu_.spr_fifo_.at(tile_x).color_ == 0 )
                         ppu_.spr_fifo_[tile_x] = p;
                 }
             }

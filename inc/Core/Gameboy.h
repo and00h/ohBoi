@@ -25,7 +25,7 @@ namespace gb {
         void disable_window() const { gpu_->toggle_window(); }
 
         [[nodiscard]] unsigned int get_cpu_cycles() const { return cpu_->get_cycles(); }
-        [[nodiscard]] uint32_t * get_screen() const { return gpu_->get_screen(); }
+        [[nodiscard]] Uint32* get_screen() const { return gpu_->get_screen(); }
 
         [[nodiscard]] bool is_paused() const { return paused_; }
         void pause() { paused_ = true; }

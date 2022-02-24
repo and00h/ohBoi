@@ -11,6 +11,7 @@
 #include <Core/Memory/Wram.h>
 #include "Core/cpu/Interrupts.h"
 #include "Core/Memory/Address_space.h"
+#include "Ppu.h"
 
 // Forward declaration
 namespace gb {
@@ -18,6 +19,8 @@ namespace gb {
 }
 
 namespace gb::memory {
+    enum io_ports: uint16_t;
+
     class Memory {
     public:
         Memory(gb::Gameboy &gb, std::shared_ptr<gb::cpu::Interrupts> interrupts, std::unique_ptr<mbc::Mbc> controller);
@@ -29,14 +32,12 @@ namespace gb::memory {
         void step_dma(unsigned int cycles);
         [[nodiscard]] bool is_dma_completed() const { return dma_controller_.is_completed(); }
     private:
-        Gameboy& gb_;
-
         class Dma_controller {
         public:
-            explicit Dma_controller(Memory &mem_);
+            Dma_controller(Memory &mem_);
 
             void trigger(uint8_t index);
-            void step(unsigned int cycles);
+            void step(int cycles);
 
             [[nodiscard]] uint8_t get_index() const { return mem_index_; }
             [[nodiscard]] bool is_running() const { return !(dma_completed_ || dma_wait_); }
@@ -49,15 +50,18 @@ namespace gb::memory {
             unsigned int dma_index_;
             bool dma_trigger_;
             bool dma_wait_;
-        } dma_controller_;
+        };
+
+        Gameboy& gb_;
+        Dma_controller dma_controller_;
 
         std::unique_ptr<mbc::Mbc> controller_;
         std::shared_ptr<cpu::Interrupts> interrupts_;
 
         Address_space hram_;
         Address_space io_ports_;
-        Wram wram_;
         std::array<char, 256> bootrom_;
+        Wram wram_;
 
         bool booting_;
 
