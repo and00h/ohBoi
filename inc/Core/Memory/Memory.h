@@ -9,7 +9,7 @@
 
 #include <Core/Memory/MBC/Mbc.h>
 #include <Core/Memory/Wram.h>
-#include "Core/cpu/Interrupts.h"
+#include "Core/Cpu/Interrupts.h"
 #include "Core/Memory/Address_space.h"
 
 // Forward declaration

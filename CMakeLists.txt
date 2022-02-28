@@ -11,7 +11,7 @@ include_directories(inc)
 include_directories(inc/Core)
 include_directories(inc/Core/Audio)
 include_directories(inc/Core/Audio/utils)
-include_directories(inc/Core/cpu)
+include_directories(inc/Core/Cpu)
 include_directories(inc/Core/Graphics)
 include_directories(inc/Core/Memory)
 include_directories(inc/Core/Memory/MBC)
@@ -27,9 +27,9 @@ add_executable(ohBoi
         inc/Core/Audio/audio_ch_2.h
         inc/Core/Audio/noise_ch.h
         inc/Core/Audio/wave_ch.h
-        inc/Core/cpu/Cpu.h
-        inc/Core/cpu/Interrupts.h
-        inc/Core/cpu/Registers.h
+        inc/Core/Cpu/Cpu.h
+        inc/Core/Cpu/Interrupts.h
+        inc/Core/Cpu/Registers.h
         inc/Core/Graphics/CGBPalette.h
         inc/Core/Graphics/Ppu.h
         inc/Core/Memory/MBC/Mbc.h
@@ -48,8 +48,6 @@ add_executable(ohBoi
         inc/Logger/Logger.h
         inc/Audio.h
         inc/Display.h
-        inc/macro.h
-        inc/types.h
         inc/util.h
         src/Core/Audio/apu.cpp
         src/Core/Audio/audio_ch_1.cpp
@@ -74,7 +72,7 @@ add_executable(ohBoi
         src/Audio.cpp
         src/Display.cpp
         src/main.cpp src/Core/Graphics/Tile.cpp inc/Core/Graphics/Tile.h src/Core/Graphics/Pixel_fetcher.cpp
-        src/Core/Memory/Dma_controller.cpp)
+        src/Core/Memory/Dma_controller.cpp src/Core/Graphics/Hdma_controller.cpp inc/Core/Graphics/Hdma_controller.h)
 
-target_compile_options(ohBoi PRIVATE -Wall -Wextra)
+target_compile_options(ohBoi PRIVATE -O1 -Wall -Wextra)
 target_link_libraries(ohBoi ${LIBRARIES})

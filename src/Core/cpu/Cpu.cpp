@@ -2,10 +2,10 @@
 // Created by antonio on 30/07/20.
 //
 
-#include "Core/cpu/Cpu.h"
-#include "Core/cpu/Registers.h"
+#include "Core/Cpu/Cpu.h"
+#include "Core/Cpu/Registers.h"
 #include "Core/Gameboy.h"
-#include "Core/cpu/Interrupts.h"
+#include "Core/Cpu/Interrupts.h"
 
 using gb::cpu::Cpu;
 

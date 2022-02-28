@@ -19,14 +19,9 @@ namespace gb::memory::mbc {
         uint8_t read_ram(uint16_t) override;
         void write_ram(uint16_t, uint8_t) override;
 
-        void write_rtc(std::ofstream& out) { if ( mHasRtc ) rtc_clock.write_saved_time(out, 48); }
-        void read_rtc(std::ifstream& in) { if ( mHasRtc ) rtc_clock.read_saved_time(in, 48); }
     private:
         uint8_t mbc3_ram_rtc_select;
         uint8_t mbc3_rom_bank;
-
-        uint8_t latch;
-        RTC rtc_clock;
     };
 }
 

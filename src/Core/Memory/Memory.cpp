@@ -4,12 +4,12 @@
 
 #include <util.h>
 #include "Core/Memory/Memory.h"
-#include "Core/cpu/Cpu.h"
+#include "Core/Cpu/Cpu.h"
 #include "Core/Graphics/Ppu.h"
 #include "Core/Gameboy.h"
 #include "Core/Memory/Address_space.h"
 #include "Core/Memory/Wram.h"
-#include "Core/cpu/Interrupts.h"
+#include "Core/Cpu/Interrupts.h"
 
 namespace {
     using gb::memory::boundaries;
@@ -17,8 +17,8 @@ namespace {
     using gb::memory::io_boundaries;
     using gb::memory::io_sizes;
 
-    typedef gb::util::span<boundaries, memory_areas_size> Mem_span;
-    typedef gb::util::span<io_boundaries, io_sizes> IO_span;
+    typedef gb::util::Mem_range<boundaries, memory_areas_size> Mem_span;
+    typedef gb::util::Mem_range<io_boundaries, io_sizes> IO_span;
 
     constexpr std::initializer_list<Mem_span> memory_map = {
             {boundaries::bank0_start, memory_areas_size::rom},
@@ -188,7 +188,7 @@ void gb::memory::Memory::write_io_port(uint16_t port_addr, uint8_t val) {
         case io_boundaries::io_tail_start:
             switch (port_addr) {
                 case io_ports::serial_data:
-                    //printf("%c", values);
+                    printf("%x ", val);
                     break;
                 case io_ports::joypad_reg:
                     gb_.joypad_->select_key_group(val);

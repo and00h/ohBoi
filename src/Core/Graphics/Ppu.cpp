@@ -9,24 +9,32 @@
 #include <span>
 
 #include "Core/Memory/Address_space.h"
-#include "Core/cpu/Interrupts.h"
+#include "Core/Cpu/Interrupts.h"
 #include "Tile.h"
 
 namespace {
     constexpr uint16_t vram_bank_size = 0x2000;
     constexpr uint16_t oam_size = 0xA0;
     constexpr uint32_t mono_palette[] { 0xFFFFFFFF, 0xFFCCCCCC, 0xFF777777, 0xFF000000 };
-
+    constexpr uint8_t lcd_stat_lyc_flag = 4;
+    
     enum Lcd_status_int_masks: uint8_t {
         hblank = 0x8,
         vblank = 0x10,
         oam = 0x20
     };
+
+    void update_palette_colors_gb(std::span<uint32_t> colors, uint8_t palette) {
+        for ( auto& color : colors ) {
+            color = mono_palette[palette & 0x3];
+            palette >>= 2;
+        }
+    }
 }
 // Public methods
 gb::graphics::Ppu::Ppu(gb::Gameboy &pGB, std::shared_ptr<cpu::Interrupts> interrupts)
-        : state_(Ppu_state::oam_search), gb_(pGB), interrupts_(std::move(interrupts)), pixel_fetcher_(*this),
-          bg_fifo_{}, spr_fifo_{}, oam_(oam_size), vram_(vram_bank_size << (pGB.is_cgb_ ? 1 : 0)) {
+        : state_(Ppu_state::oam_search), gb_(pGB), interrupts_(std::move(interrupts)), pixel_fetcher_(*this), bg_fifo_{},
+          spr_fifo_{}, oam_(oam_size), vram_(vram_bank_size << (pGB.is_cgb_ ? 1 : 0)), hdma_ctrl_{pGB} {
     reset();
     tileset_.reserve(384);
     tileset_bank1_.reserve(384);
@@ -48,11 +56,10 @@ void gb::graphics::Ppu::reset() {
     vram_bank_ = 0;
     enable_bg_ = enable_window_ = true;
     enable_sprites_ = true;
-    hdma_running_ = false;
     opri_ = gb_.is_cgb_ ? 0 : 1;
-    update_bg_palette();
-    update_obj0_palette();
-    update_obj1_palette();
+    update_palette_colors_gb(bg_pal_colors_, bg_pal_);
+    update_palette_colors_gb(obj0_pal_colors_, obj0_pal_);
+    update_palette_colors_gb(obj1_pal_colors_, obj1_pal_);
 //    if ( gb_.is_cgb_ ) {
 //
 //    }
@@ -71,11 +78,11 @@ uint8_t gb::graphics::Ppu::read(uint16_t addr) {
         case Gpu_reg_location::window_y:      return window_y_;
         case Gpu_reg_location::window_x:      return window_x_;
         case Gpu_reg_location::vram_bank_sel: return vram_bank_ | 0xFE;
-        case Gpu_reg_location::hdma_src_msb:  return hdma_source_msb_;
-        case Gpu_reg_location::hdma_src_lsb:  return hdma_source_lsb_;
-        case Gpu_reg_location::hdma_dst_msb:  return hdma_dest_msb_;
-        case Gpu_reg_location::hdma_dst_lsb:  return hdma_dest_lsb_;
-        case Gpu_reg_location::hdma_len:      return hdma_len_mode_.val;
+        case Gpu_reg_location::hdma_src_msb:  return hdma_ctrl_.hdma_src_.msb;
+        case Gpu_reg_location::hdma_src_lsb:  return hdma_ctrl_.hdma_src_.lsb;
+        case Gpu_reg_location::hdma_dst_msb:  return hdma_ctrl_.hdma_dst_.msb;
+        case Gpu_reg_location::hdma_dst_lsb:  return hdma_ctrl_.hdma_dst_.lsb;
+        case Gpu_reg_location::hdma_len:      return hdma_ctrl_.get_length();
         case Gpu_reg_location::bcps:          return bcps_.val;
         case Gpu_reg_location::bcpd:          return bcpd_.get_byte(bcps_.index);
         case Gpu_reg_location::ocps:          return ocps_.val;
@@ -109,19 +116,19 @@ void gb::graphics::Ppu::send(uint16_t addr, uint8_t val) {
         case Gpu_reg_location::bg_palette:
             if ( !gb_.is_cgb_ ) {
                 bg_pal_ = val;
-                update_bg_palette();
+                update_palette_colors_gb(bg_pal_colors_, bg_pal_);
             }
             break;
         case Gpu_reg_location::obj_pal0:
             if ( !gb_.is_cgb_ ) {
                 obj0_pal_ = val;
-                update_obj0_palette();
+                update_palette_colors_gb(obj0_pal_colors_, obj0_pal_);
             }
             break;
         case Gpu_reg_location::obj_pal1:
             if ( !gb_.is_cgb_ ) {
                 obj1_pal_ = val;
-                update_obj1_palette();
+                update_palette_colors_gb(obj1_pal_colors_, obj1_pal_);
             }
             break;
         case Gpu_reg_location::window_y:
@@ -134,27 +141,19 @@ void gb::graphics::Ppu::send(uint16_t addr, uint8_t val) {
             vram_bank_ = val & 1;
             break;
         case Gpu_reg_location::hdma_src_msb:
-            hdma_source_msb_ = val;
+            hdma_ctrl_.hdma_src_.msb = val;
             break;
         case Gpu_reg_location::hdma_src_lsb:
-            hdma_source_lsb_ = val;
+            hdma_ctrl_.hdma_src_.lsb = val;
             break;
         case Gpu_reg_location::hdma_dst_msb:
-            hdma_dest_msb_ = val;
+            hdma_ctrl_.hdma_dst_.msb = val;
             break;
         case Gpu_reg_location::hdma_dst_lsb:
-            hdma_dest_lsb_ = val;
+            hdma_ctrl_.hdma_dst_.lsb = val;
             break;
         case Gpu_reg_location::hdma_len:
-            if ( !hdma_running_ ) {
-                hdma_len_mode_.val = val;
-                if (hdma_len_mode_.type == 0 )
-                    launch_gp_hdma();
-                else {
-                    hdma_running_ = true;
-                    hdma_len_mode_.type = 0;
-                }
-            }
+            hdma_ctrl_.set_length(val);
             break;
         case Gpu_reg_location::bcps:
             bcps_.val = val;
@@ -212,7 +211,7 @@ void gb::graphics::Ppu::render_pixel() {
         return;
     }
 
-    if ( !bg_fifo_.empty() ) {
+    if ( bg_fifo_.size() >= 8 ) {
         Tile_pixel bg_pixel = (gb_.is_cgb_ || lcdc_.bg_window_enable_priority) && enable_bg_ ? bg_fifo_.front() : 0;
         uint8_t color_ = bg_pixel.color_;
         uint32_t *pal = gb_.is_cgb_ ? bcpd_.get_palette(bg_pixel.palette_) : bg_pal_colors_;
@@ -259,8 +258,8 @@ void gb::graphics::Ppu::step(unsigned int cycles) {
         switch (state_) {
             case Ppu_state::hblank:
                 if ( advance_scanline_counter() == 0 ) {
-                    if (hdma_running_)
-                        step_hdma();
+                    if (hdma_ctrl_.is_running())
+                        hdma_ctrl_.step();
 
                     if ( advance_scanline() == 144 ) {
                         update_state(Ppu_state::vblank);
@@ -292,11 +291,11 @@ void gb::graphics::Ppu::step(unsigned int cycles) {
                             sprites_.push_back(x);
                         }
                     }
-                    if ( !gb_.is_cgb_ ) {
+//                    if ( !gb_.is_cgb_ ) {
                         std::stable_sort(sprites_.begin(), sprites_.end(), [](Sprite a, Sprite b) {
                             return a.x <= b.x;
                         });
-                    }
+//                    }
 
                     uint8_t x_, y_;
                     x_ = scroll_x_;
@@ -334,45 +333,6 @@ void gb::graphics::Ppu::write_vram(uint16_t addr, uint8_t val) {
     }
 }
 
-static void update_palette_colors_gb(std::span<uint8_t> colors, const uint8_t palette) {
-    for ( int i = 0; i < 4; i++ )
-        colors[i] = mono_palette[(palette >> (i * 2)) & 0x3];
-}
-
-void gb::graphics::Ppu::update_bg_palette() {
-    for (int i = 0; i < 4; i++)
-        bg_pal_colors_[i] = mono_palette[(bg_pal_ >> (i * 2)) & 0x3];
-}
-
-void gb::graphics::Ppu::update_obj0_palette() {
-    for (int i = 0; i < 4; i++)
-        obj0_pal_colors_[i] = mono_palette[(obj0_pal_ >> (i * 2)) & 0x3];
-}
-
-void gb::graphics::Ppu::update_obj1_palette() {
-    for (int i = 0; i < 4; i++)
-        obj1_pal_colors_[i] = mono_palette[(obj1_pal_ >> (i * 2)) & 0x3];
-}
-
-void gb::graphics::Ppu::launch_gp_hdma() {
-    uint16_t src = (hdma_source_msb_ << 8) | hdma_source_lsb_;
-    uint16_t dst = (hdma_dest_msb_ << 8) | hdma_dest_lsb_;
-    unsigned int len = (hdma_len_mode_.len + 1) << 4;
-    for ( unsigned int i = 0; i < len; i++ )
-        gb_.mmu_->write(dst + i, gb_.mmu_->read(src + i));
-    hdma_len_mode_.val = 0xFF;
-}
-
-void gb::graphics::Ppu::step_hdma() {
-    uint16_t index = hdma_len_mode_.len << 4;
-    uint16_t src = ((hdma_source_msb_ << 8) | hdma_source_lsb_) + index;
-    uint16_t dst = ((hdma_dest_msb_ << 8) | hdma_dest_lsb_) + index;
-    for ( int i = 0; i < 0x10; i++ )
-        gb_.mmu_->write(dst + i, gb_.mmu_->read(src + i));
-    if (--hdma_len_mode_.val == 0xFF )
-        hdma_running_ = false;
-}
-
 void gb::graphics::Ppu::update_state(Ppu_state new_state) {
     static uint8_t interrupt_masks[] {
             Lcd_status_int_masks::hblank,
@@ -383,9 +343,8 @@ void gb::graphics::Ppu::update_state(Ppu_state new_state) {
     state_ = new_state;
 
     lcd_stat_ &= 0xFC;
-    auto state_val = static_cast<std::underlying_type<Ppu_state>::type>(new_state);
-    lcd_stat_ |= state_val;
-    if (lcd_stat_ & interrupt_masks[state_val] ) {
+    lcd_stat_ |= new_state;
+    if (lcd_stat_ & interrupt_masks[new_state] ) {
         interrupts_->request(cpu::Interrupts::lcd);
     }
 }
@@ -393,11 +352,11 @@ void gb::graphics::Ppu::update_state(Ppu_state new_state) {
 uint8_t gb::graphics::Ppu::advance_scanline() {
     ly_ = (ly_ + 1) % 154;
     if (ly_ == lyc_ ) {
-        lcd_stat_ |= (1 << COINCIDENCE_FLAG);
+        lcd_stat_ |= lcd_stat_lyc_flag;
         interrupts_->request(cpu::Interrupts::lcd);
     } else {
-        if (lcd_stat_ & (1 << COINCIDENCE_FLAG) ) {
-            lcd_stat_ &= ~(1 << COINCIDENCE_FLAG);
+        if (lcd_stat_ & lcd_stat_lyc_flag ) {
+            lcd_stat_ &= ~lcd_stat_lyc_flag;
         }
     }
 

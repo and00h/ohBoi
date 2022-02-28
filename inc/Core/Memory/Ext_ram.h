@@ -12,13 +12,9 @@
 namespace gb::memory {
     class Ext_ram : public gb::memory::Address_space {
     public:
-        Ext_ram(unsigned int size, std::filesystem::path& sav_path) : Address_space(size), enabled(true), sav_path(sav_path) {
-            load_from_savfile(sav_path);
+        explicit Ext_ram(unsigned int size) : Address_space(size), enabled(true) {
+//            load_from_savfile(<#initializer#>);
         };
-
-        ~Ext_ram() override {
-            save_to_savfile(sav_path);
-        }
 
         uint8_t read(unsigned int address) override { return enabled ? this->m_[address] : 0xFF; };
         void write(unsigned int address, uint8_t value) override { if (enabled) m_[address] = value; };
@@ -26,23 +22,22 @@ namespace gb::memory {
         void set_enabled(bool e) { enabled = e; }
         [[nodiscard]] bool is_enabled() const { return enabled; }
 
-        void save_to_savfile(const std::filesystem::path& sav_path) {
-            std::ofstream out(sav_path.c_str(), std::ios::out | std::ios::binary);
+        void save_to_savfile(std::ofstream &out) {
+//            std::ofstream out(sav_path.c_str(), std::ios::out | std::ios::binary);
             out.write((char *) m_.data(), size_);
             out.close();
         }
 
-        void load_from_savfile(const std::filesystem::path& sav_path) {
-            if ( std::filesystem::exists(sav_path) ) {
-                std::ifstream in(sav_path, std::ios::in | std::ios::binary);
+        void load_from_savfile(std::ifstream &in) {
+//            if ( std::filesystem::exists(sav_path) ) {
+//                std::ifstream in(sav_path, std::ios::in | std::ios::binary);
                 in.read((char *) m_.data(), size_);
                 in.close();
-            }
+//            }
         }
 
     private:
         bool enabled;
-        std::filesystem::path sav_path;
     };
 }
 

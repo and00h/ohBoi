@@ -13,7 +13,7 @@ namespace gb::memory::mbc {
     public:
         explicit None(std::filesystem::path& rom_path)
                 : Mbc(rom_path, false, false, false, 2, 0) {
-            mRAM.set_enabled(false);
+            ram_.set_enabled(false);
         }
 
         uint8_t read(uint16_t) override;

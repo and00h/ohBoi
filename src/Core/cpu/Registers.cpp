@@ -2,7 +2,7 @@
 // Created by antonio on 30/07/20.
 //
 
-#include "Core/cpu/Registers.h"
+#include "Core/Cpu/Registers.h"
 
 gb::cpu::Registers::Registers() : Registers(false) {}
 

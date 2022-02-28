@@ -9,14 +9,13 @@ using gb::memory::mbc::Mbc3;
 Mbc3::Mbc3(std::filesystem::path& rom_path, bool battery, bool hasRam, bool rtc, unsigned int rom_banks, unsigned int ram_banks)
         : Mbc(rom_path, battery, rtc, hasRam, rom_banks, ram_banks),
           mbc3_ram_rtc_select(0),
-          mbc3_rom_bank(1),
-          latch(0) {
-    this->mRAM.set_enabled(false);
+          mbc3_rom_bank(1) {
+    this->ram_.set_enabled(false);
 }
 
 void Mbc3::write(uint16_t addr, uint8_t val) {
     if ( addr <= 0x1FFF ) {
-        mRAM.set_enabled((val & 0xF) == 0xA);
+        ram_.set_enabled((val & 0xF) == 0xA);
     }
     else if ( addr >= 0x2000 && addr <= 0x3FFF ) {
         mbc3_rom_bank = ((val & 0x7F) == 0) ? 1 : (val & 0x7F);
@@ -25,7 +24,7 @@ void Mbc3::write(uint16_t addr, uint8_t val) {
         mbc3_ram_rtc_select = (val & 0xF) % 0xD;
     }
     else if ( addr >= 0x6000 && addr <= 0x7FFF ) {
-        if ( mHasRtc && !latch && ( val & 1) == 1) {
+        if (has_rtc_ && !latch && (val & 1) ) {
             rtc_clock.latch_time();
         }
         latch = val & 1;
@@ -34,15 +33,15 @@ void Mbc3::write(uint16_t addr, uint8_t val) {
 
 uint8_t Mbc3::read(uint16_t addr) {
     unsigned int bank = addr < 0x4000 ? 0 : mbc3_rom_bank;
-    bank %= nRomBanks;
-    return mCartridge.read(bank * rom_bank_size + (addr % 0x4000));
+    bank %= rom_banks_n;
+    return rom_.read(bank * rom_bank_size + (addr % 0x4000));
 }
 
 void Mbc3::write_ram(uint16_t addr, uint8_t val) {
-    if ( mRAM.is_enabled() ) {
-        if ( mbc3_ram_rtc_select < 4 && mHasRam )
-            mRAM.write(mbc3_ram_rtc_select * ram_bank_size + addr, val);
-        else if ( mHasRtc && mbc3_ram_rtc_select >= 0x8 && mbc3_ram_rtc_select <= 0xC ) {
+    if ( ram_.is_enabled() ) {
+        if ( mbc3_ram_rtc_select < 4 && has_ram_ )
+            ram_.write(mbc3_ram_rtc_select * ram_bank_size + addr, val);
+        else if (has_rtc_ && mbc3_ram_rtc_select >= 0x8 && mbc3_ram_rtc_select <= 0xC ) {
             rtc_clock.update_time();
             switch (mbc3_ram_rtc_select) {
                 case 0x8:
@@ -66,11 +65,11 @@ void Mbc3::write_ram(uint16_t addr, uint8_t val) {
 }
 
 uint8_t Mbc3::read_ram(uint16_t addr) {
-    if ( mRAM.is_enabled() ) {
-        if ( mbc3_ram_rtc_select < 4 && mHasRam ) {
-            return mRAM.read(mbc3_ram_rtc_select * ram_bank_size + addr);
+    if ( ram_.is_enabled() ) {
+        if ( mbc3_ram_rtc_select < 4 && has_ram_ ) {
+            return ram_.read(mbc3_ram_rtc_select * ram_bank_size + addr);
         }
-        else if ( mHasRtc && mbc3_ram_rtc_select >= 0x8 && mbc3_ram_rtc_select <= 0xC ) {
+        else if (has_rtc_ && mbc3_ram_rtc_select >= 0x8 && mbc3_ram_rtc_select <= 0xC ) {
             switch (mbc3_ram_rtc_select) {
                 case 0x8:
                     return rtc_clock.get_latch_secs();

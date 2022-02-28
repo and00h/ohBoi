@@ -9,9 +9,10 @@
 #include <string>
 #include <memory>
 
-#include "Core/cpu/Cpu.h"
+#include "Core/Cpu/Cpu.h"
 #include "Core/Audio/apu.h"
 #include "Core/Graphics/Ppu.h"
+#include "Core/Graphics/Hdma_controller.h"
 #include "Core/Joypad.h"
 #include "Core/Memory/Memory.h"
 
@@ -28,14 +29,12 @@ namespace gb {
         [[nodiscard]] uint32_t * get_screen() const { return gpu_->get_screen(); }
 
         [[nodiscard]] bool is_paused() const { return paused_; }
-        void pause() { paused_ = true; }
+        void toggle_pause() { paused_ = not paused_; }
 
         void press_key(Joypad::key_e k) const { joypad_->press(k); }
         void release_key(Joypad::key_e k) const { joypad_->release(k); }
         void set_key(Joypad::key_e k, Joypad::key_state state) { joypad_->set_key_state(k, state); }
         void reset_cpu_cycle_counter() const { cpu_->reset_cycle_counter(); }
-        void resume() { paused_ = false; }
-        void toggle_pause() { paused_ = not paused_; }
         void set_speed(unsigned int multiplier) { speed_multiplier_ = multiplier; }
         void step();
 
@@ -48,12 +47,14 @@ namespace gb {
         void set_audio_reproduced() { apu_.set_reproduced(); }
         [[nodiscard]] const apu::audio_output& get_audio_output() { return apu_.get_audio_output(); }
 
+        [[nodiscard]] bool is_in_vblank() const { return gpu_->get_state() == graphics::Ppu::Ppu_state::vblank; }
     private:
         friend class cpu::Cpu;
         friend class memory::Memory;
         friend class graphics::Ppu;
+        friend class graphics::Hdma_controller;
 
-        /* Need to make these unique_ptr because they share a cpu::Interrupts object that I can only create in the
+        /* Need to make these unique_ptr because they share a Cpu::Interrupts object that I can only create in the
          * constructor's body because it's useless to make it a class member, so I can't initialize them in the constructor
          * initializer list.
          *

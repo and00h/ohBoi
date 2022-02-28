@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "Core/cpu/Cpu.h"
+#include "Core/Cpu/Cpu.h"
 
 const std::vector<std::string> instr {
         "NOP",                    // 0x00

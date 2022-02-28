@@ -8,6 +8,7 @@
 
 #include <Core/Memory/Rom.h>
 #include <Core/Memory/Ext_ram.h>
+#include "RTC.h"
 
 namespace gb::memory::mbc {
     enum mbc_banking_mode {
@@ -30,28 +31,40 @@ namespace gb::memory::mbc {
         Mbc(std::filesystem::path &rom_path, bool battery, bool rtc, bool has_ram, unsigned int rom_banks,
             unsigned int ram_banks);
 
-        virtual ~Mbc() = default;
+        ~Mbc() {
+            std::ofstream out {rom_path_.replace_extension(".sav")};
+            if ( has_battery_ ) {
+                ram_.save_to_savfile(out);
+            }
+            if ( has_rtc_ ) {
+                rtc_clock.write_saved_time(out, 48);
+            }
+        };
         virtual uint8_t read(uint16_t) = 0;
         virtual void write(uint16_t, uint8_t) = 0;
         virtual uint8_t read_ram(uint16_t) = 0;
         virtual void write_ram(uint16_t, uint8_t) = 0;
 
-        [[nodiscard]] bool has_battery() const { return mHasBattery; }
-        [[nodiscard]] bool has_rtc() const { return mHasRtc; }
+        [[nodiscard]] bool has_battery() const { return has_battery_; }
+        [[nodiscard]] bool has_rtc() const { return has_rtc_; }
         [[nodiscard]] bool is_cgb() const { return cgb; }
 
     protected:
-        Rom mCartridge;
-        Ext_ram mRAM;
+        Rom rom_;
+        Ext_ram ram_;
+        uint8_t latch;
+        RTC rtc_clock;
 
-        bool mHasBattery;
-        bool mHasRtc;
-        bool mHasRam;
+        std::filesystem::path rom_path_;
 
-        unsigned int nRomBanks;
-        unsigned int nRamBanks;
+        bool has_battery_;
+        bool has_rtc_;
+        bool has_ram_;
 
-        mbc_banking_mode mBankingMode;
+        unsigned int rom_banks_n;
+        unsigned int ram_banks_n;
+
+        mbc_banking_mode banking_mode_;
     private:
         bool cgb;
     };

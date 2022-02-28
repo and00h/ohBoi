@@ -81,6 +81,9 @@ int main() {
 
     bool close = false;
     while ( not close ) {
+        a = std::chrono::system_clock::now();
+        auto work_time = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(a - b);
+        b = a;
         SDL_Event e;
         while ( (not close) and SDL_PollEvent(&e) ) {
             if ( e.type == SDL_DROPFILE ) {
@@ -89,6 +92,7 @@ int main() {
                     display.clear();
                 } else {
                     display.set_title("OhBoi");
+                    display.clear();
                 }
                 gb = std::make_unique<gb::Gameboy>(game_path);
                 event_callbacks.clear();
@@ -113,27 +117,22 @@ int main() {
             }
         }
         if ( gb ) {
-            a = std::chrono::system_clock::now();
-            std::chrono::duration<double, std::milli> work_time = a - b;
-
-            if ( work_time.count() < (1000.0/60.0) ) {
-                std::chrono::duration<double, std::milli> delta_ms((1000.0/60.0) - work_time.count());
-                auto delta_ms_duration = std::chrono::duration_cast<std::chrono::milliseconds>(delta_ms);
-                std::this_thread::sleep_for(std::chrono::milliseconds(delta_ms_duration.count()));
-            }
-
-            b = std::chrono::system_clock::now();
-            std::chrono::duration<double, std::milli> sleep_time = b - a;
-
             gb->reset_cpu_cycle_counter();
+            bool rendered_ = false;
             while ( gb->get_cpu_cycles() < (gb::cpu::clock_speed / 60) ) {
                 gb->step();
                 if ( gb->new_audio_available() ) {
                     gb->set_audio_reproduced();
                     audio.update(gb->get_audio_output());
                 }
+                if ( !rendered_ && gb->is_in_vblank() ) {
+                    display.update_display(gb->get_screen());
+                    rendered_ = true;
+                }
             }
-            display.update_display(gb->get_screen());
+        }
+        if ( work_time.count() < 1000.0/59.73 ) {
+            std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(1000.0/59.73 - work_time.count()));
         }
     }
     return 0;
