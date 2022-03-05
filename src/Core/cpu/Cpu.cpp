@@ -6,6 +6,7 @@
 #include "Core/Cpu/Registers.h"
 #include "Core/Gameboy.h"
 #include "Core/Cpu/Interrupts.h"
+#include "Core/Cpu/cpu_defs.h"
 
 using gb::cpu::Cpu;
 
@@ -120,12 +121,12 @@ unsigned int Cpu::fetch() {
 
     Instr_argument arg{.word = 0};
 
-    if ( opcodes[opcode].operands >= 1 )
+    if (opcodes[opcode].n_operands >= 1 )
         arg.lsb = read_memory(pc_++);
-    if ( opcodes[opcode].operands == 2 )
+    if (opcodes[opcode].n_operands == 2 )
         arg.msb = read_memory(pc_++);
     if ( debug_ ) {
-        switch ( opcodes[opcode].operands ) {
+        switch ( opcodes[opcode].n_operands ) {
             case 0:
                 printf("%s", instr[opcode].c_str());
                 break;
@@ -140,7 +141,7 @@ unsigned int Cpu::fetch() {
     }
 
     decode_n_xecute(opcode, arg);
-    return opcode != 0xCB ? opcodes[opcode].cycles : cb_instructions_cycles[arg.lsb];
+    return opcode != 0xCB ? opcodes[opcode].n_cycles : cb_instructions_cycles[arg.lsb];
 }
 
 void Cpu::decode_n_xecute(uint8_t opcode, Instr_argument arg) {

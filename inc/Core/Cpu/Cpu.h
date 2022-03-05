@@ -14,26 +14,20 @@
 #include "Interrupts.h"
 #include "Core/Joypad.h"
 
-#define CLOCK_SPEED         4194304
-
-extern const std::vector<std::string> instr;
-extern const uint8_t cb_instructions_cycles[0x100];
-extern const struct opcode {
-    int operands;
-    int cycles;
-} opcodes[0x100];
-extern const int timerCounterValues[4];
-
 namespace gb {
     class Gameboy;
-    namespace debug {
-        class Debugger;
-        class Cpu_debugger;
-    }
 }
 
 namespace gb::cpu {
     const unsigned int clock_speed = 4194304;
+    const int timer_ctr_reset_values[4] {
+            1024, 16, 64, 256
+    };
+
+    struct opcode {
+        uint8_t n_operands;
+        uint8_t n_cycles;
+    };
 
     union Instr_argument;
 
@@ -56,7 +50,7 @@ namespace gb::cpu {
         void set_tac(uint8_t tac_new) { tac_ = tac_new; }
         void set_tima(uint8_t tima_new) { this->tima_ = tima_new; }
         void set_tma(uint8_t tma_new) { this->tma_ = tma_new; }
-        void update_timer_counter() { timer_counter_ = timerCounterValues[tac_.to_ulong() & 0b11]; }
+        void update_timer_counter() { timer_counter_ = gb::cpu::timer_ctr_reset_values[tac_.to_ulong() & 0b11]; }
 
         void set_double_speed(bool val) { double_speed_ = val; }
         [[nodiscard]] bool double_speed() const { return double_speed_; }

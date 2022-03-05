@@ -97,6 +97,8 @@ void gb::graphics::Ppu::send(uint16_t addr, uint8_t val) {
     switch(addr) {
         case Gpu_reg_location::lcd_control:
             lcdc_.val = val;
+            if ( !lcdc_.lcd_enable )
+                disable_lcd();
             break;
         case Gpu_reg_location::lcd_status:
             lcd_stat_ = 0x80 | val;
@@ -247,10 +249,6 @@ void gb::graphics::Ppu::render_pixel() {
 
 void gb::graphics::Ppu::step(unsigned int cycles) {
     if ( !lcdc_.lcd_enable ) {
-        scanline_counter_ = 0;
-        ly_ = 0;
-        lcd_stat_ &= 0xFC;
-        state_ = Ppu_state::vblank;
         return;
     }
 
@@ -291,11 +289,9 @@ void gb::graphics::Ppu::step(unsigned int cycles) {
                             sprites_.push_back(x);
                         }
                     }
-//                    if ( !gb_.is_cgb_ ) {
-                        std::stable_sort(sprites_.begin(), sprites_.end(), [](Sprite a, Sprite b) {
-                            return a.x <= b.x;
-                        });
-//                    }
+                    std::stable_sort(sprites_.begin(), sprites_.end(), [](Sprite a, Sprite b) {
+                        return a.x <= b.x;
+                    });
 
                     uint8_t x_, y_;
                     x_ = scroll_x_;
@@ -366,4 +362,12 @@ uint8_t gb::graphics::Ppu::advance_scanline() {
 uint16_t gb::graphics::Ppu::advance_scanline_counter() {
     scanline_counter_ = (scanline_counter_ + 1) % 456;
     return scanline_counter_;
+}
+
+void gb::graphics::Ppu::disable_lcd() {
+    scanline_counter_ = 0;
+    ly_ = 0;
+    lcd_stat_ &= 0xFC;
+    state_ = Ppu_state::vblank;
+    return;
 }

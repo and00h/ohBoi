@@ -55,7 +55,7 @@ add_executable(ohBoi
         src/Core/Audio/noise_ch.cpp
         src/Core/Audio/wave_ch.cpp
         src/Core/cpu/Cpu.cpp
-        src/Core/cpu/CPUDefinitions.cpp
+        inc/Core/Cpu/cpu_defs.h
         src/Core/cpu/Registers.cpp
         src/Core/Graphics/CGBPalette.cpp
         src/Core/Graphics/Ppu.cpp

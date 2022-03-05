@@ -265,6 +265,8 @@ namespace gb::graphics {
 
         uint8_t advance_scanline();
         uint16_t advance_scanline_counter();
+
+        void disable_lcd();
     };
 }
 
